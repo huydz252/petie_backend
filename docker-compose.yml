@@ -1,0 +1,13 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: petie
+      POSTGRES_USER: petie
+      POSTGRES_PASSWORD: petie_local
+    ports:
+      - "5432:5432"
+    volumes:
+      - petie_pg:/var/lib/postgresql/data
+volumes:
+  petie_pg:

@@ -1,0 +1,206 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String        @id @default(uuid())
+  email        String        @unique
+  passwordHash String
+  fullName     String
+  avatarUrl    String?
+  phone        String?
+  latitude     Float?
+  longitude    Float?
+  fcmToken     String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  pets         Pet[]
+  posts        Post[]
+  comments     Comment[]
+  likes        Like[]
+  sosReports   SosAlert[]
+  sentMessages ChatMessage[] @relation("SentMessages")
+  chatMembers  ChatMember[]
+
+  @@map("users")
+}
+
+enum PetSpecies {
+  DOG
+  CAT
+  BIRD
+  REPTILE
+  OTHER
+}
+
+enum PetGender {
+  MALE
+  FEMALE
+  NEUTERED
+}
+
+model Pet {
+  id          String       @id @default(uuid())
+  ownerId     String
+  name        String
+  species     PetSpecies
+  breed       String
+  gender      PetGender
+  birthday    DateTime?
+  weightKg    Float?
+  avatarUrl   String?
+  bio         String?
+  isMissing   Boolean      @default(false)
+  createdAt   DateTime     @default(now())
+
+  owner       User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  taggedPosts PostPetTag[]
+  medicalLogs MedicalLog[]
+  sosReports  SosAlert[]
+
+  @@map("pets")
+}
+
+model Post {
+  id           String       @id @default(uuid())
+  authorId     String
+  caption      String?
+  mediaUrls    String[]
+  likeCount    Int          @default(0)
+  commentCount Int          @default(0)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  author       User         @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  taggedPets   PostPetTag[]
+  comments     Comment[]
+  likes        Like[]
+  sosDetails   SosAlert?
+
+  @@map("posts")
+}
+
+model PostPetTag {
+  postId String
+  petId  String
+
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  pet    Pet    @relation(fields: [petId], references: [id], onDelete: Cascade)
+
+  @@id([postId, petId])
+  @@map("post_pet_tags")
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  postId    String
+  userId    String
+  content   String
+  createdAt DateTime @default(now())
+
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("comments")
+}
+
+model Like {
+  postId    String
+  userId    String
+  createdAt DateTime @default(now())
+
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([postId, userId])
+  @@map("likes")
+}
+
+enum SosStatus {
+  MISSING
+  FOUND
+  CANCELLED
+}
+
+model SosAlert {
+  id              String    @id @default(uuid())
+  petId           String
+  authorId        String
+  postId          String?   @unique
+  lostLatitude    Float
+  lostLongitude   Float
+  lastSeenAddress String
+  rewardAmount    Decimal?  @db.Decimal(12, 2)
+  contactPhone    String
+  status          SosStatus @default(MISSING)
+  reportedAt      DateTime  @default(now())
+
+  pet             Pet       @relation(fields: [petId], references: [id], onDelete: Cascade)
+  author          User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  post            Post?     @relation(fields: [postId], references: [id], onDelete: SetNull)
+
+  @@map("sos_alerts")
+}
+
+enum LogType {
+  VACCINATION
+  DEWORMING
+  CHECKUP
+  SURGERY
+}
+
+model MedicalLog {
+  id          String    @id @default(uuid())
+  petId       String
+  logType     LogType
+  title       String
+  clinicName  String?
+  performedAt DateTime
+  nextDueDate DateTime?
+  notes       String?
+
+  pet         Pet       @relation(fields: [petId], references: [id], onDelete: Cascade)
+
+  @@map("medical_logs")
+}
+
+model ChatRoom {
+  id        String        @id @default(uuid())
+  createdAt DateTime      @default(now())
+
+  members   ChatMember[]
+  messages  ChatMessage[]
+
+  @@map("chat_rooms")
+}
+
+model ChatMember {
+  roomId   String
+  userId   String
+  joinedAt DateTime @default(now())
+
+  room     ChatRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([roomId, userId])
+  @@map("chat_members")
+}
+
+model ChatMessage {
+  id        String   @id @default(uuid())
+  roomId    String
+  senderId  String
+  content   String
+  createdAt DateTime @default(now())
+
+  room      ChatRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  sender    User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@map("chat_messages")
+}
