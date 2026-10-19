@@ -3,3 +3,10 @@ node_modules/
 dist/
 uploads/
 *.pem
+
+.env.*
+!.env.example
+*.key
+*.p12
+*.pfx
+

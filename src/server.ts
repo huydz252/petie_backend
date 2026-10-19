@@ -1,3 +1,4 @@
+import {createOriginPolicy} from './cors_policy.js';
 import {
   db,
   safeUser,
@@ -37,8 +38,13 @@ if (secret.length < 32 || refreshSecret.length < 32 || secret === refreshSecret)
 const firebase = Boolean(process.env.GOOGLE_APPLICATION_CREDENTIALS);
 if (firebase) initializeApp({ credential: applicationDefault() });
 const app = express();
+app.set("trust proxy", process.env.TRUST_PROXY === "loopback" ? "loopback" : false);
 const http = createServer(app);
-const origin = (process.env.CORS_ORIGIN ?? "http://localhost:5173").split(",");
+const originPolicy = createOriginPolicy(
+  process.env.CORS_ORIGIN ?? 'http://localhost:5173,http://127.0.0.1:5173',
+  process.env.CORS_ALLOW_LOCALHOST === 'true',
+);
+const origin = (requestOrigin: string | undefined, callback: (error: Error | null, allowed?: boolean) => void) => callback(null, originPolicy(requestOrigin));
 const io = new Server(http, { cors: { origin } });
 app.use(
   helmet(),
@@ -683,3 +689,5 @@ async function shutdown() {
 }
 process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);
+
+

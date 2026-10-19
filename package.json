@@ -9,7 +9,7 @@
     "start": "node dist/server.js",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
-    "test": "tsx --test src/security.test.ts"
+    "test": "tsx --test src/security.test.ts src/cors_policy.test.ts"
   },
   "dependencies": {
     "@prisma/client": "6.19.0",
@@ -34,3 +34,5 @@
     "typescript": "^5.8.3"
   }
 }
+
+
