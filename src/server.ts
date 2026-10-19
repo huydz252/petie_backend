@@ -1,3 +1,4 @@
+import {uploadFileToS3, readImageFromS3, validImageName} from './services/s3.service.js';
 import {createOriginPolicy} from './cors_policy.js';
 import {
   db,
@@ -153,6 +154,20 @@ api.post(
     res.json(tokens(p.sub));
   }),
 );
+// Social images are public through an unguessable URL; the S3 bucket can stay private.
+api.get('/media/s3/:name', route(async (req, res) => {
+  if (!validImageName(req.params.name)) throw new HttpError(404, 'Không tìm thấy ảnh');
+  try {
+    const image = await readImageFromS3(req.params.name);
+    res.setHeader('Content-Type', image.contentType);
+    res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.send(image.bytes);
+  } catch (error) {
+    if (error instanceof Error && ['NoSuchKey','NotFound'].includes(error.name)) throw new HttpError(404, 'Không tìm thấy ảnh');
+    throw error;
+  }
+}));
 api.use((req: AuthRequest, _res, next) => {
   try {
     const token = req.headers.authorization?.replace(/^Bearer /, "");
@@ -184,14 +199,21 @@ api.post(
       bytes.toString("ascii", 8, 12) === "WEBP";
     if (bytes.length > 4 * 1024 * 1024 || !(jpeg || png || webp))
       throw new HttpError(400, "Ảnh JPEG/PNG/WebP phải nhỏ hơn 4 MB");
-    const name = `${randomUUID()}.${jpeg ? "jpg" : png ? "png" : "webp"}`;
-    await mkdir(uploadPath, { recursive: true });
-    await writeFile(path.join(uploadPath, name), bytes);
-    res
-      .status(201)
-      .json({
-        url: `${process.env.PUBLIC_URL ?? `${req.protocol}://${req.get("host")}`}/uploads/${name}`,
-      });
+    const useS3 = Boolean(process.env.AWS_S3_BUCKET_NAME?.trim());
+    if (useS3) {
+      try {
+        const url = await uploadFileToS3({buffer: bytes, mimetype: jpeg ? 'image/jpeg' : png ? 'image/png' : 'image/webp'});
+        res.status(201).json({url});
+      } catch (error) {
+        console.error('S3 upload failed:', error instanceof Error ? error.name : 'UnknownError');
+        throw new HttpError(502, 'Không tải được ảnh lên S3. Kiểm tra bucket, region và quyền IAM trên server.');
+      }
+      return;
+    }
+    const name = `${randomUUID()}.${jpeg ? 'jpg' : png ? 'png' : 'webp'}`;
+    await mkdir(uploadPath, {recursive: true});
+    await writeFile(path.join(uploadPath,name),bytes);
+    res.status(201).json({url:`${process.env.PUBLIC_URL ?? `${req.protocol}://${req.get('host')}`}/uploads/${name}`});
   }),
 );
 api.put(
@@ -689,5 +711,6 @@ async function shutdown() {
 }
 process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);
+
 
 
